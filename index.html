@@ -18,6 +18,8 @@
   --easy:#00c853;
   --medium:#ffab00;
   --hard:#ff3d5a;
+  --attempted:#ffd400;
+  --attempted-dim:rgba(255,212,0,0.15);
 }
 *{box-sizing:border-box;margin:0;padding:0;}
 body{
@@ -77,7 +79,7 @@ button{font-family:inherit;cursor:pointer;border:none;}
 .ring-label .n{font-size:28px;font-weight:800;}
 .ring-label .t{font-size:11px;color:var(--text-dim);}
 
-.stats-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;align-content:center;}
+.stats-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;align-content:center;}
 .stat-card{
   background:rgba(255,255,255,0.03);border:1px solid var(--card-border);
   border-radius:12px;padding:14px;text-align:center;
@@ -87,6 +89,7 @@ button{font-family:inherit;cursor:pointer;border:none;}
 .stat-card.easy .num{color:var(--easy);}
 .stat-card.medium .num{color:var(--medium);}
 .stat-card.hard .num{color:var(--hard);}
+.stat-card.attempted .num{color:var(--attempted);}
 .stat-card.total{grid-column:1/-1;background:linear-gradient(135deg,var(--accent-dim),transparent);}
 .stat-card.total .num{color:var(--accent);font-size:26px;}
 
@@ -130,6 +133,8 @@ button{font-family:inherit;cursor:pointer;border:none;}
   display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:.2s;
 }
 .chk.solved{background:var(--accent);border-color:var(--accent);animation:pop .35s ease;box-shadow:0 0 10px var(--accent-dim);}
+.chk.attempted{background:transparent;border-color:var(--attempted);box-shadow:0 0 8px var(--attempted-dim);}
+.chk.attempted::after{content:"";width:8px;height:8px;border-radius:50%;background:var(--attempted);}
 @keyframes pop{0%{transform:scale(0.6);}60%{transform:scale(1.15);}100%{transform:scale(1);}}
 .chk.solved svg{width:13px;height:13px;}
 .problem-row a{
@@ -166,6 +171,10 @@ footer{text-align:center;color:var(--text-dim);font-size:12px;margin-top:30px;}
     </div>
     <div style="display:flex;gap:10px;align-items:center;">
       <div class="user-pill"><span class="dot"></span> ATNB11</div>
+      <button class="refresh-btn" id="settingsBtn" title="Set your Cloudflare Worker URL">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 11-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 11-2.83-2.83l.06-.06a1.65 1.65 0 00.33-1.82 1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 112.83-2.83l.06.06a1.65 1.65 0 001.82.33H9a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 112.83 2.83l-.06.06a1.65 1.65 0 00-.33 1.82V9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>
+        Worker
+      </button>
       <button class="refresh-btn" id="refreshBtn">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 2v6h-6M3 22v-6h6M3.5 9a9 9 0 0114.5-4.5L21 8M20.5 15a9 9 0 01-14.5 4.5L3 16"/></svg>
         Sync
@@ -188,6 +197,7 @@ footer{text-align:center;color:var(--text-dim);font-size:12px;margin-top:30px;}
       <div class="stat-card easy"><div class="num" id="statEasy">0</div><div class="lbl">Easy</div></div>
       <div class="stat-card medium"><div class="num" id="statMedium">0</div><div class="lbl">Medium</div></div>
       <div class="stat-card hard"><div class="num" id="statHard">0</div><div class="lbl">Hard</div></div>
+      <div class="stat-card attempted"><div class="num" id="statAttempted">0</div><div class="lbl">Attempted</div></div>
     </div>
   </div>
 
@@ -202,6 +212,7 @@ footer{text-align:center;color:var(--text-dim);font-size:12px;margin-top:30px;}
     <button class="filter-btn" data-filter="Medium">Medium</button>
     <button class="filter-btn" data-filter="Hard">Hard</button>
     <button class="filter-btn" data-filter="solved">Solved</button>
+    <button class="filter-btn" data-filter="attempted">Attempted</button>
     <button class="filter-btn" data-filter="unsolved">Unsolved</button>
   </div>
 
@@ -220,6 +231,22 @@ footer{text-align:center;color:var(--text-dim);font-size:12px;margin-top:30px;}
   <div id="topicsContainer"></div>
 
   <footer>Built for ATNB11 · data synced from LeetCode public submissions</footer>
+</div>
+
+<div id="settingsOverlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:50;align-items:center;justify-content:center;padding:20px;">
+  <div class="glass" style="max-width:460px;width:100%;padding:24px;">
+    <h3 style="margin-bottom:10px;font-size:16px;">Cloudflare Worker URL (optional)</h3>
+    <p style="color:var(--text-dim);font-size:13px;margin-bottom:14px;line-height:1.5;">
+      Paste your deployed Worker URL to enable full-history sync via your LeetCode session cookie.
+      Leave empty to use recent-submissions sync + manual ticking instead.
+    </p>
+    <input id="workerUrlInput" type="text" placeholder="https://your-worker.your-subdomain.workers.dev"
+      style="width:100%;padding:10px 12px;border-radius:10px;background:rgba(255,255,255,0.05);border:1px solid var(--card-border);color:var(--text);font-family:inherit;font-size:13px;margin-bottom:14px;">
+    <div style="display:flex;gap:10px;justify-content:flex-end;">
+      <button id="settingsCancel" class="refresh-btn">Cancel</button>
+      <button id="settingsSave" class="refresh-btn" style="background:var(--accent);color:#0a0b0f;border-color:var(--accent);">Save & Sync</button>
+    </div>
+  </div>
 </div>
 
 <script>
@@ -520,21 +547,61 @@ const SHEETS = {neetcode150:NEETCODE150, blind75:BLIND75};
 const SHEET_NAMES = {neetcode150:"NeetCode 150", blind75:"Blind 75"};
 
 /* ---------------- STATE ---------------- */
-let solvedSlugs = new Set();
+let apiSolvedSlugs = new Set();     // from API/worker (auto, refreshed each sync)
+let apiAttemptedSlugs = new Set();  // attempted-but-not-solved, from worker only
+let manualSolvedSlugs = new Set(JSON.parse(localStorage.getItem("lc_manual_solved")||"[]")); // permanent, user-ticked
+let solvedSlugs = new Set();        // union of both, used for rendering
 let currentSheet = "neetcode150";
 let currentFilter = "all";
 let openTopics = new Set();
+let workerUrl = localStorage.getItem("lc_worker_url") || "";
+
+function mergeSolved(){
+  solvedSlugs = new Set([...apiSolvedSlugs, ...manualSolvedSlugs]);
+}
+
+function toggleManual(titleSlug){
+  if(apiSolvedSlugs.has(titleSlug)) return; // already confirmed via API, don't allow un-ticking that
+  if(manualSolvedSlugs.has(titleSlug)) manualSolvedSlugs.delete(titleSlug);
+  else manualSolvedSlugs.add(titleSlug);
+  localStorage.setItem("lc_manual_solved", JSON.stringify([...manualSolvedSlugs]));
+  mergeSolved();
+  render();
+}
 
 /* ---------------- FETCH ---------------- */
 async function fetchSolved(){
   showLoading();
+
+  // 1. Try Worker (full history via session cookie) if configured
+  if(workerUrl){
+    try{
+      const res = await fetch(`${workerUrl}?username=${encodeURIComponent(USERNAME)}`);
+      if(!res.ok) throw new Error("Worker status " + res.status);
+      const data = await res.json();
+      if(data.error) throw new Error(data.error);
+      if(Array.isArray(data.solved) && data.solved.length>0){
+        apiSolvedSlugs = new Set(data.solved);
+        apiAttemptedSlugs = new Set(Array.isArray(data.attempted) ? data.attempted : []);
+        mergeSolved();
+        onFetchSuccess();
+        return;
+      }
+      throw new Error("Worker returned no solved problems");
+    }catch(workerErr){
+      console.warn("Worker fetch failed, falling back:", workerErr);
+    }
+  }
+
+  // 2. Try public recent-submissions API
   try{
     const res = await fetch(PRIMARY_API);
     if(!res.ok) throw new Error("Primary API status " + res.status);
     const data = await res.json();
     const list = data.submission || data.submissions || data || [];
     if(!Array.isArray(list)) throw new Error("Unexpected response shape");
-    solvedSlugs = new Set(list.map(s => s.titleSlug).filter(Boolean));
+    apiSolvedSlugs = new Set(list.map(s => s.titleSlug).filter(Boolean));
+    mergeSolved();
     onFetchSuccess();
   }catch(primaryErr){
     console.warn("Primary API failed:", primaryErr);
@@ -556,12 +623,19 @@ async function fetchSolved(){
       if(!res.ok) throw new Error("Fallback API status " + res.status);
       const data = await res.json();
       const list = data?.data?.recentAcSubmissionList || [];
-      if(!Array.isArray(list) || list.length===0) throw new Error("No submissions returned from fallback");
-      solvedSlugs = new Set(list.map(s=>s.titleSlug).filter(Boolean));
+      apiSolvedSlugs = new Set(list.map(s=>s.titleSlug).filter(Boolean));
+      mergeSolved();
       onFetchSuccess();
     }catch(fallbackErr){
       console.error("Fallback API failed:", fallbackErr);
-      showError(primaryErr.message + " / fallback: " + fallbackErr.message);
+      // 3. Even if all network sources fail, still show the sheet with manual ticks
+      if(manualSolvedSlugs.size>0){
+        apiSolvedSlugs = new Set();
+        mergeSolved();
+        onFetchSuccess();
+      }else{
+        showError(primaryErr.message + " / fallback: " + fallbackErr.message);
+      }
     }
   }
 }
@@ -594,7 +668,7 @@ function render(){
   const container = document.getElementById("topicsContainer");
   container.innerHTML = "";
 
-  let total=0, solved=0, easy=0, medium=0, hard=0;
+  let total=0, solved=0, easy=0, medium=0, hard=0, attemptedCount=0;
 
   Object.entries(sheet).forEach(([topic, problems])=>{
     let topicSolved=0;
@@ -629,7 +703,9 @@ function render(){
     problems.forEach(p=>{
       total++;
       const isSolved = solvedSlugs.has(p.titleSlug);
+      const isAttempted = !isSolved && apiAttemptedSlugs.has(p.titleSlug);
       if(isSolved){ solved++; topicSolved++; }
+      if(isAttempted) attemptedCount++;
       if(p.difficulty==="Easy") { if(isSolved) easy++; }
       if(p.difficulty==="Medium") { if(isSolved) medium++; }
       if(p.difficulty==="Hard") { if(isSolved) hard++; }
@@ -637,18 +713,24 @@ function render(){
       const matchesFilter =
         currentFilter==="all" ? true :
         currentFilter==="solved" ? isSolved :
-        currentFilter==="unsolved" ? !isSolved :
+        currentFilter==="attempted" ? isAttempted :
+        currentFilter==="unsolved" ? (!isSolved && !isAttempted) :
         currentFilter===p.difficulty;
 
+      const isApiConfirmed = apiSolvedSlugs.has(p.titleSlug);
       const row = document.createElement("div");
       row.className = "problem-row" + (isSolved? " is-solved":"") + (matchesFilter? "":" hidden-row");
       row.innerHTML = `
-        <div class="chk ${isSolved?'solved':''}">${isSolved? '<svg viewBox="0 0 24 24" fill="none" stroke="#0a0b0f" stroke-width="4"><path d="M20 6L9 17l-5-5"/></svg>':''}</div>
+        <div class="chk ${isSolved?'solved':''} ${isAttempted?'attempted':''}" style="cursor:${isApiConfirmed?'default':'pointer'};" title="${isApiConfirmed? 'Confirmed via sync' : isAttempted ? 'Attempted, not yet solved' : 'Click to mark solved manually'}">${isSolved? '<svg viewBox="0 0 24 24" fill="none" stroke="#0a0b0f" stroke-width="4"><path d="M20 6L9 17l-5-5"/></svg>':''}</div>
         <a href="https://leetcode.com/problems/${p.titleSlug}/" target="_blank" rel="noopener">
           ${p.title} ${p.isPremium? '<span class="lock">🔒</span>':''}
         </a>
         <span class="badge ${p.difficulty}">${p.difficulty}</span>
       `;
+      row.querySelector(".chk").addEventListener("click", (e)=>{
+        e.stopPropagation();
+        toggleManual(p.titleSlug);
+      });
       listDiv.appendChild(row);
     });
 
@@ -667,6 +749,7 @@ function render(){
   document.getElementById("statEasy").textContent = easy;
   document.getElementById("statMedium").textContent = medium;
   document.getElementById("statHard").textContent = hard;
+  document.getElementById("statAttempted").textContent = attemptedCount;
 
   const pctAll = total? Math.round((solved/total)*100) : 0;
   document.getElementById("ringPct").textContent = pctAll + "%";
@@ -706,6 +789,20 @@ document.getElementById("refreshBtn").addEventListener("click", ()=>{
 });
 
 document.getElementById("retryBtn").addEventListener("click", fetchSolved);
+
+document.getElementById("settingsBtn").addEventListener("click", ()=>{
+  document.getElementById("workerUrlInput").value = workerUrl;
+  document.getElementById("settingsOverlay").style.display = "flex";
+});
+document.getElementById("settingsCancel").addEventListener("click", ()=>{
+  document.getElementById("settingsOverlay").style.display = "none";
+});
+document.getElementById("settingsSave").addEventListener("click", ()=>{
+  workerUrl = document.getElementById("workerUrlInput").value.trim().replace(/\/$/,"");
+  localStorage.setItem("lc_worker_url", workerUrl);
+  document.getElementById("settingsOverlay").style.display = "none";
+  fetchSolved();
+});
 
 localStorage.setItem("lc_username", USERNAME);
 
