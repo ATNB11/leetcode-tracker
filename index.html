@@ -162,6 +162,20 @@ button{font-family:inherit;cursor:pointer;border:none;}
 }
 .err-text{color:#ff6b81;font-size:13px;margin-top:6px;}
 footer{text-align:center;color:var(--text-dim);font-size:12px;margin-top:30px;}
+.todo-row{
+  display:flex;align-items:center;gap:12px;padding:9px 4px;
+  border-bottom:1px solid rgba(255,255,255,0.05);
+}
+.todo-row:last-child{border-bottom:none;}
+.todo-row a{color:var(--text);text-decoration:none;font-size:14px;font-weight:500;flex:1;}
+.todo-row a:hover{color:var(--accent);}
+.todo-remove{
+  background:transparent;color:var(--text-dim);border:1px solid var(--card-border);
+  width:24px;height:24px;border-radius:8px;display:flex;align-items:center;justify-content:center;
+  font-size:14px;transition:.2s;
+}
+.todo-remove:hover{color:var(--hard);border-color:var(--hard);}
+.todo-empty{color:var(--text-dim);font-size:13px;padding:8px 4px;}
 </style>
 </head>
 <body>
@@ -221,6 +235,7 @@ footer{text-align:center;color:var(--text-dim);font-size:12px;margin-top:30px;}
     <button class="tab-btn active" data-sheet="neetcode150">NeetCode 150</button>
     <button class="tab-btn" data-sheet="blind75">Blind 75</button>
     <button class="tab-btn" data-sheet="grind75">Grind 75</button>
+    <button class="tab-btn" data-sheet="todo">To-Do Later</button>
   </div>
 
   <div class="filter-bar" id="filterBar">
@@ -246,6 +261,19 @@ footer{text-align:center;color:var(--text-dim);font-size:12px;margin-top:30px;}
   </div>
 
   <div id="topicsContainer"></div>
+
+  <div class="glass" id="todoBox" style="display:none;padding:18px 20px;margin-bottom:18px;">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex-wrap:wrap;gap:10px;">
+      <h3 style="font-size:15px;font-weight:700;">📌 To-Do Later</h3>
+      <div style="display:flex;gap:8px;">
+        <input id="todoNumInput" type="number" placeholder="Problem #" min="1"
+          style="width:120px;padding:8px 10px;border-radius:10px;background:rgba(255,255,255,0.05);border:1px solid var(--card-border);color:var(--text);font-family:inherit;font-size:13px;">
+        <button id="todoAddBtn" class="refresh-btn" style="background:var(--accent);color:#0a0b0f;border-color:var(--accent);">Add</button>
+      </div>
+    </div>
+    <div id="todoStatus" style="font-size:12px;color:var(--text-dim);margin-bottom:8px;"></div>
+    <div id="todoList"></div>
+  </div>
 
   <footer>Built for ATNB11 · data synced from LeetCode public submissions</footer>
 </div>
@@ -680,6 +708,102 @@ let currentFilter = "all";
 let openTopics = new Set();
 let workerUrl = localStorage.getItem("lc_worker_url") || "";
 let overallTotals = null;
+let todoList = JSON.parse(localStorage.getItem("lc_todo_list")||"[]"); // [{number,title,titleSlug,difficulty}]
+let problemDb = null; // number -> {title,titleSlug,difficulty}, cached in localStorage
+const PROBLEM_DB_CACHE_KEY = "lc_problem_db";
+const PROBLEM_DB_TS_KEY = "lc_problem_db_ts";
+const PROBLEM_DB_MAX_AGE = 1000*60*60*24*7; // 7 days
+
+async function ensureProblemDb(){
+  if(problemDb) return problemDb;
+  const cached = localStorage.getItem(PROBLEM_DB_CACHE_KEY);
+  const ts = parseInt(localStorage.getItem(PROBLEM_DB_TS_KEY)||"0");
+  if(cached && (Date.now()-ts) < PROBLEM_DB_MAX_AGE){
+    try{ problemDb = JSON.parse(cached); return problemDb; }catch(e){}
+  }
+  return await syncProblemDb();
+}
+
+async function syncProblemDb(){
+  const status = document.getElementById("todoStatus");
+  status.textContent = "Syncing full LeetCode problem list…";
+  try{
+    const res = await fetch("https://alfa-leetcode-api.onrender.com/problems?limit=4000");
+    if(!res.ok) throw new Error("status "+res.status);
+    const data = await res.json();
+    const list = data.problemsetQuestionList || data.problems || data.questions || [];
+    if(!Array.isArray(list) || list.length===0) throw new Error("empty list");
+    const db = {};
+    list.forEach(p=>{
+      const num = p.questionFrontendId || p.frontendQuestionId || p.id;
+      if(!num) return;
+      db[num] = {
+        title: p.title || p.questionTitle,
+        titleSlug: p.titleSlug || p.title_slug,
+        difficulty: p.difficulty
+      };
+    });
+    problemDb = db;
+    localStorage.setItem(PROBLEM_DB_CACHE_KEY, JSON.stringify(db));
+    localStorage.setItem(PROBLEM_DB_TS_KEY, Date.now().toString());
+    status.textContent = `Synced ${Object.keys(db).length} problems from LeetCode.`;
+    return db;
+  }catch(err){
+    console.error("Problem DB sync failed:", err);
+    status.textContent = "Couldn't sync problem list — check the number or try again.";
+    return null;
+  }
+}
+
+async function addTodo(){
+  const input = document.getElementById("todoNumInput");
+  const num = input.value.trim();
+  const status = document.getElementById("todoStatus");
+  if(!num){ status.textContent = "Enter a problem number first."; return; }
+  if(todoList.some(t=>String(t.number)===num)){ status.textContent = "Already on your to-do list."; return; }
+
+  status.textContent = "Looking up problem #"+num+"…";
+  const db = await ensureProblemDb();
+  if(!db){ return; }
+  const entry = db[num];
+  if(!entry || !entry.titleSlug){
+    status.textContent = `Couldn't find problem #${num}. Double check the number.`;
+    return;
+  }
+  todoList.push({ number:num, title:entry.title, titleSlug:entry.titleSlug, difficulty:entry.difficulty || "Medium" });
+  localStorage.setItem("lc_todo_list", JSON.stringify(todoList));
+  status.textContent = `Added #${num} — ${entry.title}`;
+  input.value = "";
+  renderTodo();
+}
+
+function removeTodo(titleSlug){
+  todoList = todoList.filter(t=>t.titleSlug!==titleSlug);
+  localStorage.setItem("lc_todo_list", JSON.stringify(todoList));
+  renderTodo();
+}
+
+function renderTodo(){
+  const container = document.getElementById("todoList");
+  container.innerHTML = "";
+  if(todoList.length===0){
+    container.innerHTML = `<div class="todo-empty">Nothing queued up — add a problem number above.</div>`;
+    return;
+  }
+  todoList.forEach(t=>{
+    const diff = t.difficulty ? (t.difficulty.charAt(0).toUpperCase()+t.difficulty.slice(1).toLowerCase()) : "Medium";
+    const isDone = solvedSlugs.has(t.titleSlug);
+    const row = document.createElement("div");
+    row.className = "todo-row";
+    row.innerHTML = `
+      <span class="badge ${diff}">${diff}</span>
+      <a href="https://leetcode.com/problems/${t.titleSlug}/" target="_blank" rel="noopener" style="${isDone?'color:var(--accent);text-decoration:line-through;':''}">#${t.number} — ${t.title}${isDone?' ✓':''}</a>
+      <button class="todo-remove" title="Remove">✕</button>
+    `;
+    row.querySelector(".todo-remove").addEventListener("click", ()=> removeTodo(t.titleSlug));
+    container.appendChild(row);
+  });
+}
 
 function mergeSolved(){
   solvedSlugs = new Set([...apiSolvedSlugs, ...manualSolvedSlugs]);
@@ -799,6 +923,7 @@ function showError(msg){
 
 /* ---------------- RENDER ---------------- */
 function render(){
+  renderTodo();
   const sheet = SHEETS[currentSheet];
   const container = document.getElementById("topicsContainer");
   container.innerHTML = "";
@@ -912,7 +1037,25 @@ document.querySelectorAll(".tab-btn").forEach(btn=>{
   btn.addEventListener("click", ()=>{
     document.querySelectorAll(".tab-btn").forEach(b=>b.classList.remove("active"));
     btn.classList.add("active");
-    currentSheet = btn.dataset.sheet;
+    const sheet = btn.dataset.sheet;
+
+    if(sheet === "todo"){
+      document.getElementById("dashboard").style.display = "none";
+      document.getElementById("overallBox").style.display = "none";
+      document.getElementById("filterBar").style.display = "none";
+      document.getElementById("topicsContainer").style.display = "none";
+      document.getElementById("todoBox").style.display = "block";
+      renderTodo();
+      return;
+    }
+
+    document.getElementById("todoBox").style.display = "none";
+    document.getElementById("filterBar").style.display = "flex";
+    document.getElementById("topicsContainer").style.display = "block";
+    if(overallTotals) document.getElementById("overallBox").style.display = "flex";
+    document.getElementById("dashboard").style.display = "grid";
+
+    currentSheet = sheet;
     openTopics = new Set();
     render();
   });
@@ -948,6 +1091,12 @@ document.getElementById("settingsSave").addEventListener("click", ()=>{
   document.getElementById("settingsOverlay").style.display = "none";
   fetchSolved();
 });
+
+document.getElementById("todoAddBtn").addEventListener("click", addTodo);
+document.getElementById("todoNumInput").addEventListener("keydown", (e)=>{
+  if(e.key==="Enter") addTodo();
+});
+renderTodo();
 
 localStorage.setItem("lc_username", USERNAME);
 
