@@ -269,6 +269,7 @@ footer{text-align:center;color:var(--text-dim);font-size:12px;margin-top:30px;}
         <input id="todoNumInput" type="number" placeholder="Problem #" min="1"
           style="width:120px;padding:8px 10px;border-radius:10px;background:rgba(255,255,255,0.05);border:1px solid var(--card-border);color:var(--text);font-family:inherit;font-size:13px;">
         <button id="todoAddBtn" class="refresh-btn" style="background:var(--accent);color:#0a0b0f;border-color:var(--accent);">Add</button>
+        <button id="todoClearBtn" class="refresh-btn">Clear completed</button>
       </div>
     </div>
     <div id="todoStatus" style="font-size:12px;color:var(--text-dim);margin-bottom:8px;"></div>
@@ -728,18 +729,39 @@ async function syncProblemDb(){
   const status = document.getElementById("todoStatus");
   status.textContent = "Syncing full LeetCode problem list…";
   try{
-    const res = await fetch("https://alfa-leetcode-api.onrender.com/problems?limit=4000");
+    const query = {
+      query: `
+        query problemsetQuestionList($categorySlug: String, $limit: Int, $skip: Int, $filters: QuestionListFilterInput) {
+          problemsetQuestionList: questionList(categorySlug: $categorySlug, limit: $limit, skip: $skip, filters: $filters) {
+            total: totalNum
+            questions: data {
+              difficulty
+              title
+              titleSlug
+              questionFrontendId
+            }
+          }
+        }
+      `,
+      variables: { categorySlug: "", limit: 4000, skip: 0, filters: {} }
+    };
+    const url = FALLBACK_PROXY + encodeURIComponent(LEETCODE_GRAPHQL);
+    const res = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(query)
+    });
     if(!res.ok) throw new Error("status "+res.status);
     const data = await res.json();
-    const list = data.problemsetQuestionList || data.problems || data.questions || [];
+    const list = data?.data?.problemsetQuestionList?.questions || [];
     if(!Array.isArray(list) || list.length===0) throw new Error("empty list");
     const db = {};
     list.forEach(p=>{
-      const num = p.questionFrontendId || p.frontendQuestionId || p.id;
+      const num = p.questionFrontendId;
       if(!num) return;
-      db[num] = {
-        title: p.title || p.questionTitle,
-        titleSlug: p.titleSlug || p.title_slug,
+      db[String(num)] = {
+        title: p.title,
+        titleSlug: p.titleSlug,
         difficulty: p.difficulty
       };
     });
@@ -1095,6 +1117,11 @@ document.getElementById("settingsSave").addEventListener("click", ()=>{
 document.getElementById("todoAddBtn").addEventListener("click", addTodo);
 document.getElementById("todoNumInput").addEventListener("keydown", (e)=>{
   if(e.key==="Enter") addTodo();
+});
+document.getElementById("todoClearBtn").addEventListener("click", ()=>{
+  todoList = todoList.filter(t=>!solvedSlugs.has(t.titleSlug));
+  localStorage.setItem("lc_todo_list", JSON.stringify(todoList));
+  renderTodo();
 });
 renderTodo();
 
