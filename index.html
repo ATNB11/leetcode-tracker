@@ -728,6 +728,34 @@ async function ensureProblemDb(){
 async function syncProblemDb(){
   const status = document.getElementById("todoStatus");
   status.textContent = "Syncing full LeetCode problem list…";
+
+  // 1. Try via Worker (server-side, no CORS proxy needed) if configured
+  if(workerUrl){
+    try{
+      const res = await fetch(`${workerUrl}?action=problemlist`);
+      if(!res.ok) throw new Error("Worker status "+res.status);
+      const data = await res.json();
+      const list = data.questions || [];
+      if(Array.isArray(list) && list.length>0){
+        const db = {};
+        list.forEach(p=>{
+          const num = p.questionFrontendId;
+          if(!num) return;
+          db[String(num)] = { title:p.title, titleSlug:p.titleSlug, difficulty:p.difficulty };
+        });
+        problemDb = db;
+        localStorage.setItem(PROBLEM_DB_CACHE_KEY, JSON.stringify(db));
+        localStorage.setItem(PROBLEM_DB_TS_KEY, Date.now().toString());
+        status.textContent = `Synced ${Object.keys(db).length} problems from LeetCode.`;
+        return db;
+      }
+      throw new Error("Worker returned no questions");
+    }catch(workerErr){
+      console.warn("Worker problemlist failed, falling back:", workerErr);
+    }
+  }
+
+  // 2. Fallback: corsproxy + LeetCode GraphQL directly from browser
   try{
     const query = {
       query: `
@@ -772,7 +800,9 @@ async function syncProblemDb(){
     return db;
   }catch(err){
     console.error("Problem DB sync failed:", err);
-    status.textContent = "Couldn't sync problem list — check the number or try again.";
+    status.textContent = workerUrl
+      ? "Couldn't sync problem list via Worker or fallback — try again shortly."
+      : "Couldn't sync problem list — add your Worker URL (Worker button, top right) for reliable sync.";
     return null;
   }
 }
