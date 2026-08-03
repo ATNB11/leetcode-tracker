@@ -815,18 +815,45 @@ async function addTodo(){
   if(todoList.some(t=>String(t.number)===num)){ status.textContent = "Already on your to-do list."; return; }
 
   status.textContent = "Looking up problem #"+num+"…";
-  const db = await ensureProblemDb();
-  if(!db){ return; }
-  const entry = db[num];
-  if(!entry || !entry.titleSlug){
-    status.textContent = `Couldn't find problem #${num}. Double check the number.`;
-    return;
+  document.getElementById("todoAddBtn").disabled = true;
+
+  try{
+    let entry = null;
+
+    // 1. Try fast single-lookup via Worker (jumps straight to the right page)
+    if(workerUrl){
+      try{
+        const res = await fetch(`${workerUrl}?action=lookup&number=${encodeURIComponent(num)}`);
+        if(res.ok){
+          const data = await res.json();
+          if(data.found && data.problem){
+            entry = { title:data.problem.title, titleSlug:data.problem.titleSlug, difficulty:data.problem.difficulty };
+          }
+        }
+      }catch(werr){
+        console.warn("Worker lookup failed:", werr);
+      }
+    }
+
+    // 2. Fallback: cached full DB (sync once, reused after)
+    if(!entry){
+      const db = await ensureProblemDb();
+      if(db && db[num]) entry = db[num];
+    }
+
+    if(!entry || !entry.titleSlug){
+      status.textContent = `Couldn't find problem #${num}. Double check the number.`;
+      return;
+    }
+
+    todoList.push({ number:num, title:entry.title, titleSlug:entry.titleSlug, difficulty:entry.difficulty || "Medium" });
+    localStorage.setItem("lc_todo_list", JSON.stringify(todoList));
+    status.textContent = `Added #${num} — ${entry.title}`;
+    input.value = "";
+    renderTodo();
+  }finally{
+    document.getElementById("todoAddBtn").disabled = false;
   }
-  todoList.push({ number:num, title:entry.title, titleSlug:entry.titleSlug, difficulty:entry.difficulty || "Medium" });
-  localStorage.setItem("lc_todo_list", JSON.stringify(todoList));
-  status.textContent = `Added #${num} — ${entry.title}`;
-  input.value = "";
-  renderTodo();
 }
 
 function removeTodo(titleSlug){
