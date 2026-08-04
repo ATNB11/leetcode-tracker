@@ -707,7 +707,8 @@ let solvedSlugs = new Set();        // union of both, used for rendering
 let currentSheet = "neetcode150";
 let currentFilter = "all";
 let openTopics = new Set();
-let workerUrl = localStorage.getItem("lc_worker_url") || "";
+let workerUrl = (localStorage.getItem("lc_worker_url") || "").split("?")[0].replace(/\/$/,"");
+if(workerUrl) localStorage.setItem("lc_worker_url", workerUrl); // persist the cleaned version
 let overallTotals = null;
 let todoList = JSON.parse(localStorage.getItem("lc_todo_list")||"[]"); // [{number,title,titleSlug,difficulty}]
 let problemDb = null; // number -> {title,titleSlug,difficulty}, cached in localStorage
@@ -1165,7 +1166,13 @@ document.getElementById("settingsCancel").addEventListener("click", ()=>{
   document.getElementById("settingsOverlay").style.display = "none";
 });
 document.getElementById("settingsSave").addEventListener("click", ()=>{
-  workerUrl = document.getElementById("workerUrlInput").value.trim().replace(/\/$/,"");
+  let raw = document.getElementById("workerUrlInput").value.trim();
+  try{
+    const u = new URL(raw);
+    workerUrl = u.origin; // strip any accidental query string/path
+  }catch(e){
+    workerUrl = raw.replace(/\/$/,"").split("?")[0]; // fallback sanitization
+  }
   localStorage.setItem("lc_worker_url", workerUrl);
   document.getElementById("settingsOverlay").style.display = "none";
   fetchSolved();
